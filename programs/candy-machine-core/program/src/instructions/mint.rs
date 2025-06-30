@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 use solana_program::sysvar;
 
-use super::mint_v2::{process_mint, MintAccounts};
-use crate::{constants::AUTHORITY_SEED, utils::*, AccountVersion, CandyError, CandyMachine};
+use super::mint_v2::{ process_mint, MintAccounts };
+use crate::{ constants::AUTHORITY_SEED, utils::*, AccountVersion, CandyError, CandyMachine };
 
 pub fn mint<'info>(ctx: Context<'_, '_, '_, 'info, Mint<'info>>) -> Result<()> {
     msg!("(Deprecated as of 1.0.0) Use MintV2 instead");
@@ -34,11 +34,7 @@ pub fn mint<'info>(ctx: Context<'_, '_, '_, 'info, Mint<'info>>) -> Result<()> {
         token_record: None,
     };
 
-    process_mint(
-        &mut ctx.accounts.candy_machine,
-        accounts,
-        ctx.bumps["authority_pda"],
-    )
+    process_mint(&mut ctx.accounts.candy_machine, accounts, ctx.bumps.authority_pda)
 }
 
 /// Mint a new NFT.

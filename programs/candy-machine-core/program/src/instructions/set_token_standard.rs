@@ -1,12 +1,18 @@
-use anchor_lang::{prelude::*, solana_program::sysvar};
-use mpl_token_metadata::{accounts::Metadata, types::TokenStandard};
+use anchor_lang::{ prelude::*, solana_program::sysvar };
+use mpl_token_metadata::{ accounts::Metadata, types::TokenStandard };
 use mpl_utils::resize_or_reallocate_account_raw;
 
 use crate::{
-    approve_metadata_delegate, assert_token_standard, cmp_pubkeys,
-    constants::{AUTHORITY_SEED, MPL_TOKEN_AUTH_RULES_PROGRAM, RULE_SET_LENGTH, SET, UNSET},
-    revoke_collection_authority_helper, AccountVersion, ApproveMetadataDelegateHelperAccounts,
-    CandyError, CandyMachine, RevokeCollectionAuthorityHelperAccounts,
+    approve_metadata_delegate,
+    assert_token_standard,
+    cmp_pubkeys,
+    constants::{ AUTHORITY_SEED, MPL_TOKEN_AUTH_RULES_PROGRAM, RULE_SET_LENGTH, SET, UNSET },
+    revoke_collection_authority_helper,
+    AccountVersion,
+    ApproveMetadataDelegateHelperAccounts,
+    CandyError,
+    CandyMachine,
+    RevokeCollectionAuthorityHelperAccounts,
 };
 
 pub fn set_token_standard(ctx: Context<SetTokenStandard>, token_standard: u8) -> Result<()> {
@@ -14,8 +20,9 @@ pub fn set_token_standard(ctx: Context<SetTokenStandard>, token_standard: u8) ->
     let candy_machine = &mut accounts.candy_machine;
 
     let collection_metadata_info = &accounts.collection_metadata;
-    let collection_metadata: Metadata =
-        Metadata::try_from(&collection_metadata_info.to_account_info())?;
+    let collection_metadata: Metadata = Metadata::try_from(
+        &collection_metadata_info.to_account_info()
+    )?;
     // check that the update authority matches the collection update authority
     if !cmp_pubkeys(&collection_metadata.mint, accounts.collection_mint.key) {
         return err!(CandyError::MintMismatch);
@@ -25,8 +32,7 @@ pub fn set_token_standard(ctx: Context<SetTokenStandard>, token_standard: u8) ->
 
     if matches!(candy_machine.version, AccountVersion::V1) {
         // revoking the existing collection authority
-        let collection_authority_record = accounts
-            .collection_authority_record
+        let collection_authority_record = accounts.collection_authority_record
             .as_ref()
             .ok_or(CandyError::MissingCollectionAuthorityRecord)?;
 
@@ -41,8 +47,8 @@ pub fn set_token_standard(ctx: Context<SetTokenStandard>, token_standard: u8) ->
         revoke_collection_authority_helper(
             revoke_accounts,
             candy_machine.key(),
-            *ctx.bumps.get("authority_pda").unwrap(),
-            collection_metadata.token_standard,
+            ctx.bumps.authority_pda,
+            collection_metadata.token_standard
         )?;
 
         // approve a new metadata delegate
@@ -57,12 +63,10 @@ pub fn set_token_standard(ctx: Context<SetTokenStandard>, token_standard: u8) ->
             payer: accounts.payer.to_account_info(),
             system_program: accounts.system_program.to_account_info(),
             sysvar_instructions: accounts.sysvar_instructions.to_account_info(),
-            authorization_rules_program: accounts
-                .authorization_rules_program
+            authorization_rules_program: accounts.authorization_rules_program
                 .to_owned()
                 .map(|authorization_rules_program| authorization_rules_program.to_account_info()),
-            authorization_rules: accounts
-                .authorization_rules
+            authorization_rules: accounts.authorization_rules
                 .to_owned()
                 .map(|authorization_rules| authorization_rules.to_account_info()),
         };
@@ -72,27 +76,23 @@ pub fn set_token_standard(ctx: Context<SetTokenStandard>, token_standard: u8) ->
         candy_machine.version = AccountVersion::V2;
     }
 
-    msg!(
-        "Changing token standard from {} to {}",
-        candy_machine.token_standard,
-        token_standard
-    );
+    msg!("Changing token standard from {} to {}", candy_machine.token_standard, token_standard);
 
     candy_machine.token_standard = token_standard;
 
     let required_length = candy_machine.data.get_space_for_candy()?;
     let candy_machine_info = candy_machine.to_account_info();
 
-    if token_standard == TokenStandard::ProgrammableNonFungible as u8 {
+    if token_standard == (TokenStandard::ProgrammableNonFungible as u8) {
         // make sure we have space in the account to store the rule set
-        if candy_machine_info.data_len() < (required_length + RULE_SET_LENGTH + 1) {
+        if candy_machine_info.data_len() < required_length + RULE_SET_LENGTH + 1 {
             msg!("Allocating space to store the rule set");
 
             resize_or_reallocate_account_raw(
                 &candy_machine_info,
                 &accounts.payer.to_account_info(),
                 &accounts.system_program.to_account_info(),
-                required_length + (1 + RULE_SET_LENGTH),
+                required_length + (1 + RULE_SET_LENGTH)
             )?;
         }
 

@@ -1,12 +1,18 @@
-use anchor_lang::{prelude::*, solana_program::sysvar};
+use anchor_lang::{ prelude::*, solana_program::sysvar };
 use mpl_token_metadata::accounts::Metadata;
 
 use crate::{
-    approve_metadata_delegate, cmp_pubkeys,
-    constants::{AUTHORITY_SEED, MPL_TOKEN_AUTH_RULES_PROGRAM},
-    revoke_collection_authority_helper, revoke_metadata_delegate, AccountVersion,
-    ApproveMetadataDelegateHelperAccounts, CandyError, CandyMachine,
-    RevokeCollectionAuthorityHelperAccounts, RevokeMetadataDelegateHelperAccounts,
+    approve_metadata_delegate,
+    cmp_pubkeys,
+    constants::{ AUTHORITY_SEED, MPL_TOKEN_AUTH_RULES_PROGRAM },
+    revoke_collection_authority_helper,
+    revoke_metadata_delegate,
+    AccountVersion,
+    ApproveMetadataDelegateHelperAccounts,
+    CandyError,
+    CandyMachine,
+    RevokeCollectionAuthorityHelperAccounts,
+    RevokeMetadataDelegateHelperAccounts,
 };
 
 pub fn set_collection_v2(ctx: Context<SetCollectionV2>) -> Result<()> {
@@ -16,10 +22,7 @@ pub fn set_collection_v2(ctx: Context<SetCollectionV2>) -> Result<()> {
     // check whether the new collection mint is the same as the current collection; when they
     // are the same, we are just using this instruction to update the collection delegate so
     // we don't enforce the "mint in progress" constraint
-    if !cmp_pubkeys(
-        accounts.new_collection_mint.key,
-        &candy_machine.collection_mint,
-    ) {
+    if !cmp_pubkeys(accounts.new_collection_mint.key, &candy_machine.collection_mint) {
         if candy_machine.items_redeemed > 0 {
             return err!(CandyError::NoChangingCollectionDuringMint);
         } else if !cmp_pubkeys(accounts.collection_mint.key, &candy_machine.collection_mint) {
@@ -46,15 +49,12 @@ pub fn set_collection_v2(ctx: Context<SetCollectionV2>) -> Result<()> {
             authorization_rules: None,
         };
 
-        revoke_metadata_delegate(
-            revoke_accounts,
-            candy_machine.key(),
-            *ctx.bumps.get("authority_pda").unwrap(),
-        )?;
+        revoke_metadata_delegate(revoke_accounts, candy_machine.key(), ctx.bumps.authority_pda)?;
     } else {
         let collection_metadata_info = &accounts.collection_metadata;
-        let collection_metadata: Metadata =
-            Metadata::try_from(&collection_metadata_info.to_account_info())?;
+        let collection_metadata: Metadata = Metadata::try_from(
+            &collection_metadata_info.to_account_info()
+        )?;
 
         // revoking the existing collection authority
 
@@ -69,8 +69,8 @@ pub fn set_collection_v2(ctx: Context<SetCollectionV2>) -> Result<()> {
         revoke_collection_authority_helper(
             revoke_accounts,
             candy_machine.key(),
-            *ctx.bumps.get("authority_pda").unwrap(),
-            collection_metadata.token_standard,
+            ctx.bumps.authority_pda,
+            collection_metadata.token_standard
         )?;
         // bump the version of the account since we are setting a metadata delegate
         candy_machine.version = AccountVersion::V2;
@@ -88,12 +88,10 @@ pub fn set_collection_v2(ctx: Context<SetCollectionV2>) -> Result<()> {
         payer: accounts.payer.to_account_info(),
         system_program: accounts.system_program.to_account_info(),
         sysvar_instructions: accounts.sysvar_instructions.to_account_info(),
-        authorization_rules_program: accounts
-            .authorization_rules_program
+        authorization_rules_program: accounts.authorization_rules_program
             .as_ref()
             .map(|authorization_rules_program| authorization_rules_program.to_account_info()),
-        authorization_rules: accounts
-            .authorization_rules
+        authorization_rules: accounts.authorization_rules
             .as_ref()
             .map(|authorization_rules| authorization_rules.to_account_info()),
     };

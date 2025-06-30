@@ -3,21 +3,33 @@ use arrayref::array_ref;
 use mpl_token_metadata::{
     accounts::Metadata,
     instructions::{
-        CreateMasterEditionV3CpiBuilder, CreateMetadataAccountV3CpiBuilder, CreateV1CpiBuilder,
-        MintV1CpiBuilder, SetAndVerifyCollectionCpiBuilder,
-        SetAndVerifySizedCollectionItemCpiBuilder, UpdateMetadataAccountV2CpiBuilder,
-        UpdateV1CpiBuilder, VerifyCollectionV1CpiBuilder,
+        CreateMasterEditionV3CpiBuilder,
+        CreateMetadataAccountV3CpiBuilder,
+        CreateV1CpiBuilder,
+        MintV1CpiBuilder,
+        SetAndVerifyCollectionCpiBuilder,
+        SetAndVerifySizedCollectionItemCpiBuilder,
+        UpdateMetadataAccountV2CpiBuilder,
+        UpdateV1CpiBuilder,
+        VerifyCollectionV1CpiBuilder,
     },
-    types::{Collection, DataV2, PrintSupply, RuleSetToggle, TokenStandard},
+    types::{ Collection, DataV2, PrintSupply, RuleSetToggle, TokenStandard },
 };
 use solana_program::sysvar;
 
 use crate::{
     constants::{
-        AUTHORITY_SEED, EMPTY_STR, HIDDEN_SECTION, MPL_TOKEN_AUTH_RULES_PROGRAM, NULL_STRING,
+        AUTHORITY_SEED,
+        EMPTY_STR,
+        HIDDEN_SECTION,
+        MPL_TOKEN_AUTH_RULES_PROGRAM,
+        NULL_STRING,
     },
     utils::*,
-    AccountVersion, CandyError, CandyMachine, ConfigLine,
+    AccountVersion,
+    CandyError,
+    CandyMachine,
+    ConfigLine,
 };
 
 /// Accounts to mint an NFT.
@@ -46,9 +58,7 @@ pub(crate) struct MintAccounts<'info> {
 
 pub fn mint_v2<'info>(ctx: Context<'_, '_, '_, 'info, MintV2<'info>>) -> Result<()> {
     let accounts = MintAccounts {
-        spl_ata_program: ctx
-            .accounts
-            .spl_ata_program
+        spl_ata_program: ctx.accounts.spl_ata_program
             .as_ref()
             .map(|spl_ata_program| spl_ata_program.to_account_info()),
         authority_pda: ctx.accounts.authority_pda.to_account_info(),
@@ -66,25 +76,15 @@ pub fn mint_v2<'info>(ctx: Context<'_, '_, '_, 'info, MintV2<'info>>) -> Result<
         recent_slothashes: ctx.accounts.recent_slothashes.to_account_info(),
         system_program: ctx.accounts.system_program.to_account_info(),
         sysvar_instructions: Some(ctx.accounts.sysvar_instructions.to_account_info()),
-        token: ctx
-            .accounts
-            .token
-            .as_ref()
-            .map(|token| token.to_account_info()),
+        token: ctx.accounts.token.as_ref().map(|token| token.to_account_info()),
         token_metadata_program: ctx.accounts.token_metadata_program.to_account_info(),
         spl_token_program: ctx.accounts.spl_token_program.to_account_info(),
-        token_record: ctx
-            .accounts
-            .token_record
+        token_record: ctx.accounts.token_record
             .as_ref()
             .map(|token_record| token_record.to_account_info()),
     };
 
-    process_mint(
-        &mut ctx.accounts.candy_machine,
-        accounts,
-        ctx.bumps["authority_pda"],
-    )
+    process_mint(&mut ctx.accounts.candy_machine, accounts, ctx.bumps.authority_pda)
 }
 
 /// Mint a new NFT.
@@ -95,7 +95,7 @@ pub fn mint_v2<'info>(ctx: Context<'_, '_, '_, 'info, MintV2<'info>>) -> Result<
 pub(crate) fn process_mint(
     candy_machine: &mut Box<Account<'_, CandyMachine>>,
     accounts: MintAccounts,
-    bump: u8,
+    bump: u8
 ) -> Result<()> {
     if !accounts.nft_metadata.data_is_empty() {
         return err!(CandyError::MetadataAccountMustBeEmpty);
@@ -107,10 +107,7 @@ pub(crate) fn process_mint(
     }
 
     // check that we got the correct collection mint
-    if !cmp_pubkeys(
-        &accounts.collection_mint.key(),
-        &candy_machine.collection_mint,
-    ) {
+    if !cmp_pubkeys(&accounts.collection_mint.key(), &candy_machine.collection_mint) {
         return err!(CandyError::CollectionKeyMismatch);
     }
 
@@ -120,13 +117,16 @@ pub(crate) fn process_mint(
     }
 
     let collection_metadata_info = &accounts.collection_metadata;
-    let collection_metadata: Metadata =
-        Metadata::try_from(&collection_metadata_info.to_account_info())?;
+    let collection_metadata: Metadata = Metadata::try_from(
+        &collection_metadata_info.to_account_info()
+    )?;
     // check that the update authority matches the collection update authority
-    if !cmp_pubkeys(
-        &collection_metadata.update_authority,
-        &accounts.collection_update_authority.key(),
-    ) {
+    if
+        !cmp_pubkeys(
+            &collection_metadata.update_authority,
+            &accounts.collection_update_authority.key()
+        )
+    {
         return err!(CandyError::IncorrectCollectionAuthority);
     }
 
@@ -146,8 +146,7 @@ pub(crate) fn process_mint(
 
     let config_line = get_config_line(candy_machine, remainder, candy_machine.items_redeemed)?;
 
-    candy_machine.items_redeemed = candy_machine
-        .items_redeemed
+    candy_machine.items_redeemed = candy_machine.items_redeemed
         .checked_add(1)
         .ok_or(CandyError::NumericalOverflowError)?;
     // release the data borrow
@@ -155,12 +154,13 @@ pub(crate) fn process_mint(
 
     // (3) minting
 
-    let mut creators: Vec<mpl_token_metadata::types::Creator> =
-        vec![mpl_token_metadata::types::Creator {
+    let mut creators: Vec<mpl_token_metadata::types::Creator> = vec![
+        mpl_token_metadata::types::Creator {
             address: accounts.authority_pda.key(),
             verified: true,
             share: 0,
-        }];
+        }
+    ];
 
     for c in &candy_machine.data.creators {
         creators.push(mpl_token_metadata::types::Creator {
@@ -171,22 +171,17 @@ pub(crate) fn process_mint(
     }
 
     match candy_machine.version {
-        AccountVersion::V1 => create(
-            candy_machine,
-            accounts,
-            bump,
-            config_line,
-            creators,
-            collection_metadata,
-        ),
-        AccountVersion::V2 => create_and_mint(
-            candy_machine,
-            accounts,
-            bump,
-            config_line,
-            creators,
-            collection_metadata,
-        ),
+        AccountVersion::V1 =>
+            create(candy_machine, accounts, bump, config_line, creators, collection_metadata),
+        AccountVersion::V2 =>
+            create_and_mint(
+                candy_machine,
+                accounts,
+                bump,
+                config_line,
+                creators,
+                collection_metadata
+            ),
     }
 }
 
@@ -196,7 +191,7 @@ pub(crate) fn process_mint(
 pub fn get_config_line(
     candy_machine: &Account<'_, CandyMachine>,
     index: usize,
-    mint_number: u64,
+    mint_number: u64
 ) -> Result<ConfigLine> {
     if let Some(hs) = &candy_machine.data.hidden_settings {
         return Ok(ConfigLine {
@@ -225,18 +220,19 @@ pub fn get_config_line(
         mint_number as usize
     } else {
         let items_available = candy_machine.data.items_available;
-        let indices_start = HIDDEN_SECTION
-            + 4
-            + (items_available as usize) * candy_machine.data.get_config_line_size()
-            + (items_available
-                .checked_div(8)
-                .ok_or(CandyError::NumericalOverflowError)?
-                + 1) as usize;
+        let indices_start =
+            HIDDEN_SECTION +
+            4 +
+            (items_available as usize) * candy_machine.data.get_config_line_size() +
+            (
+                (items_available.checked_div(8).ok_or(CandyError::NumericalOverflowError)? +
+                    1) as usize
+            );
         // calculates the mint index and retrieves the value at that position
         let mint_index = indices_start + index * 4;
         let value_to_use = u32::from_le_bytes(*array_ref![account_data, mint_index, 4]) as usize;
         // calculates the last available index and retrieves the value at that position
-        let last_index = indices_start + ((items_available - mint_number - 1) * 4) as usize;
+        let last_index = indices_start + (((items_available - mint_number - 1) * 4) as usize);
         let last_value = u32::from_le_bytes(*array_ref![account_data, last_index, 4]);
         // swap-remove: this guarantees that we remove the used mint index from the available array
         // in a constant time O(1) no matter how big the indices array is
@@ -254,8 +250,9 @@ pub fn get_config_line(
 
     let name = if name_length > 0 {
         let name_slice: &mut [u8] = &mut account_data[position..position + name_length];
-        let name = String::from_utf8(name_slice.to_vec())
-            .map_err(|_| CandyError::CouldNotRetrieveConfigLineData)?;
+        let name = String::from_utf8(name_slice.to_vec()).map_err(
+            |_| CandyError::CouldNotRetrieveConfigLineData
+        )?;
         name.trim_end_matches(NULL_STRING).to_string()
     } else {
         EMPTY_STR.to_string()
@@ -264,8 +261,9 @@ pub fn get_config_line(
     position += name_length;
     let uri = if uri_length > 0 {
         let uri_slice: &mut [u8] = &mut account_data[position..position + uri_length];
-        let uri = String::from_utf8(uri_slice.to_vec())
-            .map_err(|_| CandyError::CouldNotRetrieveConfigLineData)?;
+        let uri = String::from_utf8(uri_slice.to_vec()).map_err(
+            |_| CandyError::CouldNotRetrieveConfigLineData
+        )?;
         uri.trim_end_matches(NULL_STRING).to_string()
     } else {
         EMPTY_STR.to_string()
@@ -287,17 +285,12 @@ fn create_and_mint(
     bump: u8,
     config_line: ConfigLine,
     creators: Vec<mpl_token_metadata::types::Creator>,
-    collection_metadata: Metadata,
+    collection_metadata: Metadata
 ) -> Result<()> {
     let candy_machine_key = candy_machine.key();
-    let authority_seeds = [
-        AUTHORITY_SEED.as_bytes(),
-        candy_machine_key.as_ref(),
-        &[bump],
-    ];
+    let authority_seeds = [AUTHORITY_SEED.as_bytes(), candy_machine_key.as_ref(), &[bump]];
 
-    let sysvar_instructions_info = accounts
-        .sysvar_instructions
+    let sysvar_instructions_info = accounts.sysvar_instructions
         .as_ref()
         .ok_or(CandyError::MissingInstructionsSysvar)?;
 
@@ -311,11 +304,11 @@ fn create_and_mint(
         .update_authority(&accounts.authority_pda, true)
         .master_edition(Some(&accounts.nft_master_edition))
         .token_standard(
-            if candy_machine.token_standard == TokenStandard::ProgrammableNonFungible as u8 {
+            if candy_machine.token_standard == (TokenStandard::ProgrammableNonFungible as u8) {
                 TokenStandard::ProgrammableNonFungible
             } else {
                 TokenStandard::NonFungible
-            },
+            }
         )
         .name(config_line.name)
         .uri(config_line.uri)
@@ -328,11 +321,13 @@ fn create_and_mint(
             key: candy_machine.collection_mint,
         })
         .decimals(0)
-        .print_supply(if candy_machine.data.max_supply == 0 {
-            PrintSupply::Zero
-        } else {
-            PrintSupply::Limited(candy_machine.data.max_supply)
-        })
+        .print_supply(
+            if candy_machine.data.max_supply == 0 {
+                PrintSupply::Zero
+            } else {
+                PrintSupply::Limited(candy_machine.data.max_supply)
+            }
+        )
         .system_program(&accounts.system_program)
         .sysvar_instructions(sysvar_instructions_info)
         .spl_token_program(&accounts.spl_token_program)
@@ -340,23 +335,15 @@ fn create_and_mint(
 
     // mints one token
 
-    let token_info = accounts
-        .token
-        .as_ref()
-        .ok_or(CandyError::MissingTokenAccount)?;
-    let token_record_info =
-        if candy_machine.token_standard == TokenStandard::ProgrammableNonFungible as u8 {
-            Some(
-                accounts
-                    .token_record
-                    .as_ref()
-                    .ok_or(CandyError::MissingTokenRecord)?,
-            )
-        } else {
-            None
-        };
-    let spl_ata_program_info = accounts
-        .spl_ata_program
+    let token_info = accounts.token.as_ref().ok_or(CandyError::MissingTokenAccount)?;
+    let token_record_info = if
+        candy_machine.token_standard == (TokenStandard::ProgrammableNonFungible as u8)
+    {
+        Some(accounts.token_record.as_ref().ok_or(CandyError::MissingTokenRecord)?)
+    } else {
+        None
+    };
+    let spl_ata_program_info = accounts.spl_ata_program
         .as_ref()
         .ok_or(CandyError::MissingSplAtaProgram)?;
 
@@ -364,11 +351,7 @@ fn create_and_mint(
         .token(token_info)
         // if we are initializing a new token account, we need to pass the
         // token owner; otherwise, we pass `None`
-        .token_owner(if token_info.data_is_empty() {
-            Some(&accounts.nft_owner)
-        } else {
-            None
-        })
+        .token_owner(if token_info.data_is_empty() { Some(&accounts.nft_owner) } else { None })
         .metadata(&accounts.nft_metadata)
         .master_edition(Some(&accounts.nft_master_edition))
         .mint(&accounts.nft_mint)
@@ -397,15 +380,17 @@ fn create_and_mint(
         .primary_sale_happened(true)
         .new_update_authority(collection_metadata.update_authority);
 
-    if candy_machine.token_standard == TokenStandard::ProgrammableNonFungible as u8 {
+    if candy_machine.token_standard == (TokenStandard::ProgrammableNonFungible as u8) {
         let candy_machine_info = candy_machine.to_account_info();
         let account_data = candy_machine_info.data.borrow_mut();
 
         // the rule set for a newly minted pNFT is determined by:
         //   1. check if there is a rule set stored on the account; otherwise
         //   2. use the rule set from the collection metadata
-        let candy_machine_rule_set =
-            candy_machine.get_rule_set(&account_data, &collection_metadata)?;
+        let candy_machine_rule_set = candy_machine.get_rule_set(
+            &account_data,
+            &collection_metadata
+        )?;
 
         if let Some(rule_set) = candy_machine_rule_set {
             update_cpi.rule_set(RuleSetToggle::Set(rule_set));
@@ -436,7 +421,7 @@ fn create(
     bump: u8,
     config_line: ConfigLine,
     creators: Vec<mpl_token_metadata::types::Creator>,
-    collection_metadata: Metadata,
+    collection_metadata: Metadata
 ) -> Result<()> {
     let cm_key = candy_machine.key();
     let authority_seeds = [AUTHORITY_SEED.as_bytes(), cm_key.as_ref(), &[bump]];

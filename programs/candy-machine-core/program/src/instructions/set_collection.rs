@@ -2,9 +2,15 @@ use anchor_lang::prelude::*;
 use mpl_token_metadata::accounts::Metadata;
 
 use crate::{
-    approve_collection_authority_helper, cmp_pubkeys, constants::AUTHORITY_SEED,
-    revoke_collection_authority_helper, AccountVersion, ApproveCollectionAuthorityHelperAccounts,
-    CandyError, CandyMachine, RevokeCollectionAuthorityHelperAccounts,
+    approve_collection_authority_helper,
+    cmp_pubkeys,
+    constants::AUTHORITY_SEED,
+    revoke_collection_authority_helper,
+    AccountVersion,
+    ApproveCollectionAuthorityHelperAccounts,
+    CandyError,
+    CandyMachine,
+    RevokeCollectionAuthorityHelperAccounts,
 };
 
 pub fn set_collection(ctx: Context<SetCollection>) -> Result<()> {
@@ -24,8 +30,9 @@ pub fn set_collection(ctx: Context<SetCollection>) -> Result<()> {
     }
 
     let collection_metadata_info = &accounts.collection_metadata;
-    let collection_metadata: Metadata =
-        Metadata::try_from(&collection_metadata_info.to_account_info())?;
+    let collection_metadata: Metadata = Metadata::try_from(
+        &collection_metadata_info.to_account_info()
+    )?;
 
     // revoking the existing collection authority
 
@@ -40,8 +47,8 @@ pub fn set_collection(ctx: Context<SetCollection>) -> Result<()> {
     revoke_collection_authority_helper(
         revoke_accounts,
         candy_machine.key(),
-        *ctx.bumps.get("authority_pda").unwrap(),
-        collection_metadata.token_standard,
+        ctx.bumps.authority_pda,
+        collection_metadata.token_standard
     )?;
 
     // approving the new collection authority
